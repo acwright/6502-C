@@ -1,0 +1,33 @@
+# Build artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Assembly output
+# *.list
+# *.lst
+*.map
+*.sym
+*.img
+
+# Backup and temporary files
+*~
+*.bak
+*.tmp
+*.swp
+*.swo
+
+# IDE and editor files
+# The cc65 IntelliSense setup is project config, not personal preference,
+# so it is the one thing under .vscode worth sharing.
+.vscode/*
+!.vscode/c_cpp_properties.json
+
+# OS files
+.DS_Store
+Thumbs.db

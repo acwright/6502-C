@@ -1,0 +1,38 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "cc65",
+
+            // Empty compilerPath stops IntelliSense from querying the host
+            // compiler for its default include paths, so <stdio.h> resolves
+            // to cc65's header rather than the Mac's.
+            "compilerPath": "",
+
+            // c11 for the anonymous unions in 6502.h's IO register blocks.
+            // cc65 itself never reads this file — it takes the blocks in its
+            // default (cc65) dialect, which allows them regardless — so this
+            // only keeps the editor from flagging them.
+            "cStandard": "c11",
+
+            // cc65's headers, as Homebrew installs them.  On another machine
+            // this is the line to change: `cl65 --print-target-path` prints
+            // the `target` directory, and the headers are its `include`
+            // sibling.  Listing alternatives here does not help — the
+            // extension warns about every path it cannot find.
+            "includePath": [
+                "${workspaceFolder}",
+                "/opt/homebrew/share/cc65/include"
+            ],
+
+            // cc65 keywords and predefines the editor's parser has never
+            // heard of.  __fastcall__ is the one that matters: without it
+            // every prototype in 6502.h and in cc65's own headers is a
+            // syntax error.
+            "defines": [
+                "__fastcall__=",
+                "__CC65__=0x0219"
+            ]
+        }
+    ]
+}
