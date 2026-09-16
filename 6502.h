@@ -532,6 +532,12 @@ void waitvsync(void);
 #define SC_STATUS_FRME      0x02          /* Framing error */
 #define SC_STATUS_PARE      0x01          /* Parity error */
 
+/* Serial Command Register bits: */
+#define SC_CMD_RXIRQ_OFF    0x02          /* Receiver interrupt disabled (set = off).
+                                           * Set it before polling SC_DATA yourself,
+                                           * as XModem does; while it is clear, Chrout
+                                           * moves a received byte into the input buffer */
+
 /* --- GPIO / Input Board (65C22 VIA) (IO 6: $9400-$940F) --- */
 /* Port B = matrix keyboard / joystick 1, Port A = PS/2 keyboard / joystick 2.
  * CB1/CA1 IRQs fire when a key scancode is ready. */
