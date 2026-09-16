@@ -3,7 +3,7 @@
  * =============================================================================
  *
  *   CPU:       WDC 65C02S
- *   BIOS:      v1.5
+ *   BIOS:      v1.6
  *   Compiler:  cc65
  *
  *   The C counterpart of 6502.inc.  Include it to reach the Kernal routines,
