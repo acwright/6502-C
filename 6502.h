@@ -125,6 +125,7 @@
 #define FS_IO_ADDR          (*(unsigned char **)0x037F)          /* Load/save address for FsLoadFileAddr / FsSaveFileAddr */
 #define FS_FILE_SIZE        (*(volatile unsigned int *)0x034A)   /* File size in bytes */
 #define PRG_IMAGE_END       (*(volatile unsigned int *)0x038E)   /* End address of a loaded program image (0 = none) */
+#define NV_ID               (*(volatile unsigned char *)0x0390)  /* Owner ID input for the NvWrite Kernal entry (the C wrapper sets it) */
 
 
 /* =============================================================================
@@ -328,7 +329,44 @@ void __fastcall__ RtcWriteDate(const RtcDate *date);
 
 unsigned char __fastcall__ RtcReadNVRAM(unsigned char addr);
 void __fastcall__ RtcWriteNVRAM(unsigned char addr, unsigned char value);
-/* The DS1511Y's 256 bytes of battery-backed NVRAM. */
+/* The DS1511Y's 256 bytes of battery-backed NVRAM.  Neither checks
+ * HW_PRESENT — test HW_RTC first if the card may be absent. */
+
+/* --- NVRAM Save Slots (DS1511Y) (BIOS v1.6) --- */
+/* The same 256 bytes as 16 slots of 14 payload bytes each, with an owner ID
+ * and a checksum per slot (layout in 6502.inc and the BIOS README).  All six
+ * check for the RTC themselves.  On a BIOS older than 1.6 the entries are
+ * reserved slots that do nothing, so check KernalVersion() first. */
+
+unsigned int __fastcall__ NvStat(unsigned char slot);
+/* Slot state packed as (owner << 8) | status — see NV_STATUS() and
+ * NV_OWNER().  The status is NV_EMPTY, NV_VALID or NV_BAD, or NV_ERROR if
+ * there is no RTC or the slot is not 0-15. */
+
+unsigned int __fastcall__ NvRead(unsigned char slot, void *buf);
+/* Copy a slot's NV_SLOT_DATA payload bytes to buf, packed like NvStat.  Only
+ * an NV_VALID slot is copied; on any other status buf is left untouched, and
+ * the status says why — no save yet, or a damaged one. */
+
+unsigned char __fastcall__ NvWrite(unsigned char slot, unsigned char owner,
+                                   const void *buf);
+/* Write NV_SLOT_DATA bytes from buf as owner (1-255).  Returns 0 on success,
+ * 1 if there is no RTC, the slot is not 0-15, or owner is 0 (nothing is
+ * written — use NvErase). */
+
+unsigned char __fastcall__ NvErase(unsigned char slot);
+/* Zero all 16 bytes of a slot.  Returns 0 on success, 1 on no RTC or a bad
+ * slot. */
+
+unsigned char __fastcall__ NvFind(unsigned char owner);
+/* The lowest slot owner holds, valid or damaged, or NV_NONE.  Owner 0 finds
+ * the lowest free slot. */
+
+unsigned char NvFormat(void);
+/* Erase all 16 slots.  Returns 0 on success, 1 on no RTC. */
+
+#define NV_STATUS(v)        ((unsigned char)((v) & 0xFF))
+#define NV_OWNER(v)         ((unsigned char)((v) >> 8))
 
 /* --- CompactFlash Storage --- */
 
@@ -445,7 +483,8 @@ void waitvsync(void);
 #define RTC_RAM_ADDR        (*(volatile unsigned char *)0x8810)  /* NVRAM address register */
 #define RTC_RAM_DATA        (*(volatile unsigned char *)0x8813)  /* NVRAM data register */
 
-#define RTC_CTRL_B_TE       0x80          /* Transfer Enable — set to inhibit clock updates during write */
+#define RTC_CTRL_B_TE       0x80          /* Transfer Enable — 1 = counters update the user registers once a second, 0 = inhibited */
+#define RTC_CTRL_B_BME      0x20          /* Burst Mode Enable — 1 = RTC_RAM_ADDR auto-increments on each access of RTC_RAM_DATA */
 
 /* The month register's upper 3 bits are oscillator/SQW control, not month
  * data.  Mask with RTC_MON_MASK on read and preserve them on write. */
@@ -1008,7 +1047,18 @@ struct __ac_vc {
 
 /* --- BIOS Version --- */
 #define BIOS_VERSION_MAJOR  1
-#define BIOS_VERSION_MINOR  5
+#define BIOS_VERSION_MINOR  6
+
+/* --- NVRAM Save Slots (v1.6) --- */
+#define NV_SLOTS            16            /* Save slots in RTC NVRAM */
+#define NV_SLOT_SIZE        16            /* Bytes per slot (slot n at NVRAM n*16) */
+#define NV_SLOT_DATA        14            /* Payload bytes per slot */
+#define NV_CK_SEED          0xA6          /* Checksum seed */
+#define NV_EMPTY            0             /* NvStat: slot is free */
+#define NV_VALID            1             /* NvStat: owner ID set, checksum agrees */
+#define NV_BAD              2             /* NvStat: owner ID set, checksum does not */
+#define NV_ERROR            0xFF          /* NvStat / NvRead: no RTC, or slot not 0-15 */
+#define NV_NONE             0xFF          /* NvFind: no slot matched */
 
 /* --- ASCII Control Characters --- */
 #define CHAR_BEL            0x07          /* Bell (beep via SID) */

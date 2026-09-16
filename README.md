@@ -127,7 +127,8 @@ costs extra, since `SID.voice[i]` has to build a pointer.
 Routines that report failure in the carry return `unsigned char` — 0 for
 success, 1 for error — so they read as `if (FsLoadFileAddr(...) != 0)`.
 Routines that return several values in A/X/Y take a pointer instead
-(`RtcReadTime`) or pack the pair into an `unsigned int` (`VideoGetCursor`).
+(`RtcReadTime`) or pack the pair into an `unsigned int` (`VideoGetCursor`,
+`NvStat`).
 
 `XModemLoad`/`XModemSave` and `StReadSector`/`StWriteSector` have no wrappers:
 their arguments are zero page pointers the routine advances in place, which is
