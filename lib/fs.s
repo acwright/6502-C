@@ -12,7 +12,11 @@
         .import carryerr
         .import popax
 
+        .ifdef VDP
+        .include "6502-VDP.inc"
+        .else
         .include "6502.inc"
+        .endif
 
 .code
 

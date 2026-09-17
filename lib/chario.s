@@ -8,7 +8,11 @@
         .export _WriteBuffer, _ReadBuffer, _BufferSize
         .export _SetIOMode, _GetIOMode
 
+        .ifdef VDP
+        .include "6502-VDP.inc"
+        .else
         .include "6502.inc"
+        .endif
 
 .code
 

@@ -33,6 +33,23 @@
                 "__fastcall__=",
                 "__CC65__=0x0219"
             ]
+        },
+        {
+            // The same, for make VDP=1: VDP selects 6502-VDP.h wherever a
+            // source picks its header with #ifdef VDP.  Switch between the
+            // two with "C/C++: Select a Configuration".
+            "name": "cc65 (VDP)",
+            "compilerPath": "",
+            "cStandard": "c11",
+            "includePath": [
+                "${workspaceFolder}",
+                "/opt/homebrew/share/cc65/include"
+            ],
+            "defines": [
+                "__fastcall__=",
+                "__CC65__=0x0219",
+                "VDP"
+            ]
         }
     ]
 }

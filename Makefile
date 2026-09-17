@@ -5,7 +5,10 @@
 # at the top level; it will be picked up automatically.
 #
 # lib/ is handled separately and always first, because every program
-# links against the 6502.lib it produces.
+# links against the 6502.lib or 6502-VDP.lib it produces.
+#
+# make VDP=1 reaches every program's Makefile and builds its 6502-PICOVDP /
+# BIOS 2.x version beside the legacy one.
 
 .PHONY: all lib check clean
 
@@ -19,7 +22,7 @@ all: lib
 	done
 
 lib:
-	@echo "==> Building 6502.lib"
+	@echo "==> Building 6502.lib and 6502-VDP.lib"
 	@$(MAKE) -C lib all
 
 check:

@@ -48,6 +48,17 @@
 ;       register 7 through VC — puts the shadow out of step, and the next
 ;       textcolor() or bgcolor() will restore the half it thinks it knows.
 ;
+;   ON THE 6502-PICOVDP (the VDP build, BIOS 2.x)
+;   ----------------------------------------------
+;   The Text console colours every cell, which is what conio expects:
+;
+;     - textcolor() and bgcolor() set the pen, VID_PEN, so they colour the
+;       text written after the call and leave the screen as it is.  VID_PEN
+;       is RAM the Kernal keeps, so there is no shadow to fall out of step.
+;     - bordercolor() is still bgcolor(): VideoSetColor writes register 7
+;       with the pen, and its low nibble, the border, follows the background.
+;     - revers() is unchanged: recorded and returned, nothing on screen.
+;
 ;   cursor() links from none.lib and sets a variable nothing here reads; the
 ;   BIOS owns the cursor.
 ; =============================================================================
@@ -70,7 +81,11 @@
         .import popa
 
         .include "zeropage.inc"
+        .ifdef VDP
+        .include "6502-VDP.inc"
+        .else
         .include "6502.inc"
+        .endif
 
 CH_HLINE        = '-'                   ; no line-drawing glyphs in the
 CH_VLINE        = '|'                   ;   BIOS character set
@@ -277,6 +292,46 @@ _revers:
 ; unsigned char __fastcall__ textcolor   (unsigned char color);
 ; unsigned char __fastcall__ bgcolor     (unsigned char color);
 ; unsigned char __fastcall__ bordercolor (unsigned char color);
+.ifdef VDP
+;   The pen, VID_PEN, is (foreground << 4) | background for text written from
+;   now on, and it can be read back.
+
+_textcolor:
+        and     #$0F
+        asl     a
+        asl     a
+        asl     a
+        asl     a                       ; into the high nibble
+        sta     tmp1
+        lda     VID_PEN
+        pha                             ; keep the old pen
+        and     #$0F                    ; hold the background
+        ora     tmp1
+        jsr     VideoSetColor
+        pla
+        lsr     a
+        lsr     a
+        lsr     a
+        lsr     a                       ; old foreground
+        ldx     #$00
+        rts
+
+; The border follows the background, so bordercolor is bgcolor.
+_bordercolor:
+_bgcolor:
+        and     #$0F
+        sta     tmp1
+        lda     VID_PEN
+        pha
+        and     #$F0                    ; hold the foreground
+        ora     tmp1
+        jsr     VideoSetColor
+        pla
+        and     #$0F                    ; old background
+        ldx     #$00
+        rts
+
+.else
 ;   Register 7 holds (foreground << 4) | backdrop for the whole screen and
 ;   cannot be read back, so colorshadow tracks it.
 
@@ -320,8 +375,11 @@ setcolor:
         sta     colorshadow
         jmp     VideoSetColor
 
+.endif
+
 ; ---------------------------------------------------------------------------
 
+.ifndef VDP
 .data
 
 ; Register 7 is write-only, so the shadow has to start at whatever the BIOS
@@ -329,6 +387,7 @@ setcolor:
 ; nothing in the BIOS changes it afterwards, so that is the boot state.
 colorshadow:
         .byte   (TMS_BLACK << 4) | TMS_WHITE
+.endif
 
 .bss
 

@@ -17,7 +17,11 @@
 
 #include <unistd.h>
 
+#ifdef VDP
+#include "6502-VDP.h"
+#else
 #include "6502.h"
+#endif
 
 int __fastcall__ write(int fd, const void *buf, unsigned count)
 {

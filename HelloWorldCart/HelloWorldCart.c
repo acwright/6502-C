@@ -28,16 +28,23 @@
  *     - There is nothing to return to.  Returning from main() lands in a
  *       halt loop in crt0cart.s rather than back in BASIC.
  *
- *   The Kernal ($A000-$B7FF) and character set ($B800-$BFFF) are still there
- *   underneath the cartridge window, so the whole jump table — and everything
- *   in 6502.h that wraps it — is available exactly as it always was.
+ *   The Kernal is still there underneath the cartridge window ($A000-$B7FF
+ *   and the character set on BIOS 1.x, all of $A000-$BFFF on 2.x), so the
+ *   whole jump table — and everything in 6502.h or 6502-VDP.h that wraps it
+ *   — is available exactly as it always was.
  *
  * =============================================================================
  */
 
 #include <stdio.h>
 
+/* make VDP=1 builds for an ACE with a 6502-PICOVDP on BIOS 2.x;
+ * the default builds for the TMS9918A on BIOS 1.x. */
+#ifdef VDP
+#include "6502-VDP.h"
+#else
 #include "6502.h"
+#endif
 
 int main(void)
 {
@@ -49,7 +56,8 @@ int main(void)
 
     /* Green text on a black backdrop, the one-call way.  HelloWorld.c spells
      * the same thing out as two register writes through the video card's IO
-     * block; this is what you would normally reach for. */
+     * block; this is what you would normally reach for.  On the PICOVDP it
+     * sets the pen, the colour of the text printed from here on. */
     VideoSetColor((TMS_LT_GREEN << 4) | TMS_BLACK);
 
     /* The cheap way: straight out through the Kernal. */

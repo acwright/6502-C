@@ -7,7 +7,11 @@
         .export _PrintStr, _PrintCRLF, _PrintDecU16
 
         .include "zeropage.inc"
+        .ifdef VDP
+        .include "6502-VDP.inc"
+        .else
         .include "6502.inc"
+        .endif
 
 .code
 

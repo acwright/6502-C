@@ -7,7 +7,11 @@
         .export _InitKB, _ReadJoystick1, _ReadJoystick2
         .export _KBDisable, _KBEnable
 
+        .ifdef VDP
+        .include "6502-VDP.inc"
+        .else
         .include "6502.inc"
+        .endif
 
 .code
 

@@ -25,7 +25,11 @@
 #include <errno.h>
 #include <stddef.h>
 
+#ifdef VDP
+#include "6502-VDP.h"
+#else
 #include "6502.h"
+#endif
 
 int __fastcall__ clock_settime(clockid_t clock_id, const struct timespec *tp)
 {

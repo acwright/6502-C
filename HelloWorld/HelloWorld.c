@@ -24,7 +24,13 @@
 
 #include <stdio.h>
 
+/* make VDP=1 builds for an ACE with a 6502-PICOVDP on BIOS 2.x;
+ * the default builds for the TMS9918A on BIOS 1.x. */
+#ifdef VDP
+#include "6502-VDP.h"
+#else
 #include "6502.h"
+#endif
 
 int main(void)
 {
@@ -42,8 +48,16 @@ int main(void)
      * is spelled out here to show an IO block in use: VC.reg is the same
      * address as the VC_REG macro, and compiles to the same two stores. */
     if (HW_PRESENT & HW_VID) {
+#ifdef VDP
+        /* On the PICOVDP every cell carries its own colour, taken from the
+         * pen when it is written, and register 7's low nibble is only the
+         * border.  So the text colour is the pen, set through the Kernal,
+         * which also makes the border follow the background. */
+        VideoSetColor((TMS_LT_GREEN << 4) | TMS_BLACK);
+#else
         VC.reg = (TMS_LT_GREEN << 4) | TMS_BLACK;
         VC.reg = VC_REG_WRITE | VC_REG_COLOR;
+#endif
     }
 
     /* The cheap way: straight out through the Kernal. */

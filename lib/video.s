@@ -1,5 +1,5 @@
 ; =============================================================================
-;   video.s — TMS9918 / pico9918 video
+;   video.s — the video console (TMS9918 on BIOS 1.x, 6502-PICOVDP on 2.x)
 ; =============================================================================
 
         .setcpu "65C02"
@@ -12,7 +12,11 @@
         .import popa
 
         .include "zeropage.inc"
+        .ifdef VDP
+        .include "6502-VDP.inc"
+        .else
         .include "6502.inc"
+        .endif
 
 .code
 
@@ -62,7 +66,18 @@ _VideoChroutRaw:
 ; void waitvsync(void);
 ;   Block until the VDP finishes a frame, so a screen update lands in the
 ;   blanking interval instead of halfway down the picture.
-;
+
+.ifdef VDP
+
+;   BIOS 2.x has WaitVBlank, which polls STAT3 rather than STAT0, so it clears
+;   no flag anything else may be waiting for and needs no timeout.  With no
+;   PICOVDP it waits 2 cs instead, so a loop paced by it keeps its speed.
+
+_waitvsync:
+        jmp     WaitVBlank
+
+.else
+
 ;   Bit 7 of the TMS9918 status register is set at the end of the active
 ;   display and cleared by the act of reading it.  One read clears whatever
 ;   was standing from an earlier frame; the loop then waits for the next.
@@ -94,3 +109,5 @@ _waitvsync:
         bne     @wait
 
 @done:  rts
+
+.endif

@@ -15,12 +15,18 @@
  *       Error: Size of array 'chk' is invalid
  *
  *   Nothing here is linked or run.  `make check` compiles it and throws the
- *   object away; the cost is one cc65 invocation.
+ *   object away; the cost is one cc65 invocation per header.  It is compiled
+ *   twice: once against 6502.h, and once with -D VDP against 6502-VDP.h, whose
+ *   video block adds the PICOVDP's second port pair.
  *
  * =============================================================================
  */
 
+#ifdef VDP
+#include "6502-VDP.h"
+#else
 #include "6502.h"
+#endif
 
 #define SAME(a, b)  extern char chk[(&(a) == &(b)) ? 1 : -1]
 
@@ -136,6 +142,11 @@ SAME(SID.env3,       SID_ENV3);
 SAME(VC.data,        VC_DATA);
 SAME(VC.reg,         VC_REG);
 SAME(VC.status,      VC_STATUS);      /* same port as .reg */
+#ifdef VDP
+SAME(VC.data2,       VC_DATA2);
+SAME(VC.reg2,        VC_REG2);
+SAME(VC.status2,     VC_STATUS2);     /* same port as .reg2 */
+#endif
 
 /* --- Each block must be exactly as wide as the card's decoded window. --- */
 extern char sz_ram [sizeof(struct __ac_ram)       == 1024 ? 1 : -1];
@@ -145,4 +156,8 @@ extern char sz_sc  [sizeof(struct __ac_sc)        == 4    ? 1 : -1];
 extern char sz_gpio[sizeof(struct __ac_gpio)      == 16   ? 1 : -1];
 extern char sz_voic[sizeof(struct __ac_sid_voice) == 7    ? 1 : -1];
 extern char sz_sid [sizeof(struct __ac_sid)       == 0x1D ? 1 : -1];
+#ifdef VDP
+extern char sz_vc  [sizeof(struct __ac_vc)        == 4    ? 1 : -1];
+#else
 extern char sz_vc  [sizeof(struct __ac_vc)        == 2    ? 1 : -1];
+#endif
