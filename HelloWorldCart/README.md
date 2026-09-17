@@ -8,8 +8,8 @@ The assembly version of this program lives in
 [6502-ASM](https://github.com/acwright/6502-ASM); this is the same cartridge
 written for cc65, and the same 32 KB image comes out the other end.
 
-A cartridge overlays `$C000-$FFFF`, replacing BASIC, the Monitor, Wozmon and
-the CPU vectors, and the machine runs it from reset. There is no loader and
+A cartridge overlays `$C000-$FFFF`, replacing BASIC, Wozmon, the CPU vectors
+and, on BIOS 1.x, the Monitor, and the machine runs it from reset. There is no loader and
 nothing underneath to return to:
 
 | | Where it lives | What starts it | Where it ends |
@@ -18,9 +18,9 @@ nothing underneath to return to:
 | `HelloWorldCart` | ROM at `$C000` | the RESET vector | a halt loop |
 
 `HelloWorldCart.c` is the interesting part precisely because it is dull —
-`main()` is `main()`, and `6502.h` is unchanged, because the Kernal
-(`$A000-$B7FF`) and character set (`$B800-$BFFF`) are still there underneath
-the cartridge window. What changes is everything around it:
+`main()` is `main()`, and `6502.h` is unchanged, because the Kernal is
+still there underneath the cartridge window (`$A000-$B7FF` and the character
+set at `$B800-$BFFF` on BIOS 1.x, all of `$A000-$BFFF` on 2.x). What changes is everything around it:
 
 **[`6502-16K.cfg`](../6502-16K.cfg)** splits the program in two. Code and
 constants go in ROM and stay there; initialized variables cannot, because a
@@ -59,6 +59,14 @@ Size:
 Run:
 
     make run
+
+Build and run for an ACE with a 6502-PICOVDP on BIOS 2.x (`HelloWorldCart-VDP.crt`):
+
+    make VDP=1
+    make VDP=1 run
+
+Until the emulator bundles BIOS 2.0 for the PICOVDP card, add
+`ROM=path/to/BIOS.bin` to boot a 2.0 image.
 
 Burn an EEPROM (28C256, via [minipro](https://gitlab.com/DavidGriffith/minipro)):
 

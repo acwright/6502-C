@@ -1,7 +1,7 @@
 6502-C
 ======
 
-C code for the [A.C. Wright 6502](https://github.com/acwright/6502-ACE) family of computer systems, built with [cc65](https://cc65.github.io/).
+C code for the [AC6502](https://github.com/acwright/6502-ACE) family of computer systems, built with [cc65](https://cc65.github.io/).
 > 📖 **Guide:** [AC6502 Documentation](https://acwright.github.io/6502-DOCS/) — the user's and programmer's guide for the whole family.
 > The assembly counterpart of this repository is [6502-ASM](https://github.com/acwright/6502-ASM).
 
@@ -15,6 +15,11 @@ The same is true one level down: a C program can also be a cartridge ROM that
 the machine runs from reset, with no BASIC and no loader underneath it. That
 is a different linker config and a different startup module, not a different
 language — see [Cartridges](#cartridges).
+
+Every program also builds two ways from the same source: `make` for any ACE on
+BIOS 1.x with a TMS9918A, and `make VDP=1` for an ACE converted to a
+[6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) on BIOS 2.x — see
+[Choosing a build](#choosing-a-build).
 
 ## Building Programs
 
@@ -57,12 +62,12 @@ Installed via the [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) app
 
 ### Available Targets
 
-- `make` or `make all` - Build the program
+- `make` or `make all` - Build the program (`make VDP=1` builds the 6502-PICOVDP version)
 - `make view` - Display hexdump of the built program
 - `make size` - Print the segment sizes from the link map
 - `make woz` - Create a Wozmon compatible file using [bin2woz](https://github.com/acwright/bin2woz)
 - `make cf` - Create a CompactFlash disk image containing the program
-- `make run` - Launch the emulator app with the built program loaded
+- `make run` - Launch the emulator app with the built program loaded (`ROM=path/to/BIOS.bin` boots that BIOS image instead of the bundled one)
 - `make clean` - Remove build artifacts
 
 Cartridge projects build a `.crt` instead of a `.prg`, so they have no `woz`
@@ -70,8 +75,9 @@ or `cf` target and add one of their own:
 
 - `make eeprom` - Burn the image to a 28C256 with [minipro](https://gitlab.com/DavidGriffith/minipro)
 
-At the top level, `make` builds `6502.lib` first and then every program
-directory, and `make check` runs the header checks in `tests/` on their own.
+At the top level, `make` builds `6502.lib` and `6502-VDP.lib` first and then
+every program directory, `make VDP=1` builds every program's VDP version, and
+`make check` runs the header checks in `tests/` on their own.
 
 ### Example
 
@@ -88,12 +94,53 @@ Six pieces, five of them shared at the top level:
 
 | File | What it is |
 |---|---|
-| `6502.h` | The Kernal, the IO registers and the constants, for C |
+| `6502.h` | The Kernal, the IO registers and the constants, for C (BIOS 1.x, TMS9918A) |
 | `6502.inc` | The same thing for ca65 — kept identical to the copy in [6502-ASM](https://github.com/acwright/6502-ASM) |
+| `6502-VDP.h`, `6502-VDP.inc` | The same pair for BIOS 2.x and the 6502-PICOVDP — see [Choosing a build](#choosing-a-build) |
 | `6502.cfg` | The linker config: where the program, the C stack and the heap go |
 | `6502-16K.cfg` | The same, for a cartridge ROM at `$C000` |
-| `lib/` | The sources of `6502.lib` — startup, Kernal wrappers, `write()` |
+| `lib/` | The sources of `6502.lib` and `6502-VDP.lib` — startup, Kernal wrappers, `write()` |
 | `<Program>/` | Your `.c`, its Makefile, its README |
+
+### Choosing a build
+
+| | `make` | `make VDP=1` |
+|---|---|---|
+| Machine | any ACE, TMS9918A | ACE with a 6502-PICOVDP |
+| BIOS | 1.x | 2.x |
+| Header | `6502.h` | `6502-VDP.h` |
+| Library | `6502.lib` | `6502-VDP.lib` |
+| Cartridge startup | `lib/crt0cart.o` | `lib/vdp/crt0cart.o` |
+| Outputs | `HelloWorld.prg` | `HelloWorld-VDP.prg` |
+
+A source that builds both ways picks its header with the `VDP` macro. The
+Makefile passes `-D VDP` for cc65 and `--asm-define VDP` for ca65, since
+`cl65 -D` does not reach the assembler:
+
+```c
+#ifdef VDP
+#include "6502-VDP.h"
+#else
+#include "6502.h"
+#endif
+```
+
+`6502-VDP.h` is `6502.h` for BIOS 2.x, section for section: the PICOVDP's
+second port pair, its registers, bit fields, status values and font IDs as
+`VC_*` names from the card's `SPEC.md`; the video variables (`VID_PEN`,
+`VDP_CAPS` ...); and wrappers for the thirteen PICOVDP Kernal entries,
+`VdpInfo()` through `VdpStatus()`. There is no Monitor on 2.x, so there are no
+`MONITOR_*` names, and `TMS_*` name the sixteen colours of palette row 0.
+
+The two libraries come from the same sources. The PICOVDP wrappers
+(`lib/vdp.s`) are only in `6502-VDP.lib`, so a legacy program cannot link a
+call its ROM does not have. **Nothing built with `VDP=1` runs on a TMS9918A**;
+a legacy build that only calls the Kernal also runs on 2.x.
+
+On 2.x the video console colours every cell. `VideoSetColor()` sets the pen,
+the colour of text printed from then on, and the border follows the
+background; conio's `textcolor()` and `bgcolor()` set the pen the same way.
+`waitvsync()` is the Kernal's `WaitVBlank`.
 
 ### 6502.h
 
@@ -198,8 +245,8 @@ unless a program says otherwise.
 machine has no counter for one — nor is `CLOCKS_PER_SEC` even defined for
 target `none`.
 
-Three conio calls do not fit a TMS9918, which colours the whole screen rather
-than each cell: `textcolor()` and `bgcolor()` recolour everything,
+On BIOS 1.x, three conio calls do not fit a TMS9918, which colours the whole
+screen rather than each cell: `textcolor()` and `bgcolor()` recolour everything,
 `bordercolor()` is the same register as `bgcolor()`, and `revers()` records
 the flag but has no attribute to drive. And while conio's *output* follows
 `IO_MODE` onto the serial console, its *cursor* is the BIOS's video cursor —
@@ -208,30 +255,36 @@ always read 0,0. The comment at the top of `lib/conio.s` spells all of this
 out before you rely on any of it.
 
 `video.s` also carries **`waitvsync()`**, which waits for the VDP to finish a
-frame so an update lands in the blanking interval. The BIOS never reads the
-VDP status register and leaves VDP interrupts off, so nothing competes for the
-frame flag — but a program that installs its own handler through `IRQ_PTR`
-could, so the wait gives up after about five frames rather than hanging.
+frame so an update lands in the blanking interval. On 1.x the BIOS never reads
+the VDP status register and leaves VDP interrupts off, so nothing competes for
+the frame flag — but a program that installs its own handler through `IRQ_PTR`
+could, so the wait gives up after about five frames rather than hanging. The
+VDP build calls `WaitVBlank`, which polls a status register nothing clears.
+
+`6502-VDP.lib` adds **`vdp.s`**, one wrapper for each of 2.x's PICOVDP entries.
+Each returns 1 (or 0, or -1 where it also returns a value, as `6502-VDP.h`
+says) when there is no PICOVDP or an argument is out of range.
 
 ### tests/
 
-Two checks, run by `make check` and by a plain `make`:
+Two checks, run by `make check` and by a plain `make`, each on both pairs —
+`6502.h`/`6502.inc` and `6502-VDP.h`/`6502-VDP.inc`:
 
 - **`regcheck.c`** asserts at compile time that every field of every Section 5b
   IO block lands on the same address as its Section 5 macro, and that each
   block is exactly as wide as the card's window. Nothing is linked or run — a
   wrong offset is a build error instead of a program that writes to the wrong
   register.
-- **`parity.py`** compares every address `6502.h` and `6502.inc` both name, so
-  the two cannot drift apart unnoticed.
+- **`parity.py`** compares every address and every constant a header and its
+  include both name, so the two cannot drift apart unnoticed.
 
 ## Cartridges
 
-A cartridge overlays `$C000-$FFFF`, replacing BASIC, the Monitor, Wozmon and
-the CPU vectors, and the machine runs it from reset. The Kernal
-(`$A000-$B7FF`) and character set (`$B800-$BFFF`) stay put underneath, so the
-whole jump table — and everything in `6502.h` that wraps it — is still yours
-to call.
+A cartridge overlays `$C000-$FFFF`, replacing BASIC, Wozmon, the CPU vectors
+and, on BIOS 1.x, the Monitor, and the machine runs it from reset. The Kernal
+stays put underneath — `$A000-$B7FF` plus the character set at `$B800-$BFFF`
+on 1.x, all of `$A000-$BFFF` on 2.x — so the whole jump table, and everything
+in `6502.h` or `6502-VDP.h` that wraps it, is still yours to call.
 
 [HelloWorldCart](HelloWorldCart) is the worked example, and the interesting
 thing about its `main()` is that it looks exactly like the `.prg` version's.
@@ -311,7 +364,8 @@ the comment there for why, and for how to get the bytes back.
 
 - [6502-ACE](https://github.com/acwright/6502-ACE) — the hardware, and the index of the whole family
 - [6502-ASM](https://github.com/acwright/6502-ASM) — the same programs in assembly
-- [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind `6502.h` and `6502.inc`
+- [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind `6502.h` and `6502.inc` (1.x) and `6502-VDP.h` and `6502-VDP.inc` (2.x)
+- [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) — the video card behind `6502-VDP.h`
 - [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run these programs without hardware
 - [6502-BAS](https://github.com/acwright/6502-BAS) — the same idea for BASIC listings
 - [6502-DOCS](https://github.com/acwright/6502-DOCS) — the documentation site

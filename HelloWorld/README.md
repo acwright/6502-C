@@ -28,3 +28,11 @@ Size:
 Run:
 
     make run
+
+Build and run for an ACE with a 6502-PICOVDP on BIOS 2.x (`HelloWorld-VDP.prg`):
+
+    make VDP=1
+    make VDP=1 run
+
+Until the emulator bundles BIOS 2.0 for the PICOVDP card, add
+`ROM=path/to/BIOS.bin` to boot a 2.0 image.
