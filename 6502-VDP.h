@@ -150,7 +150,7 @@
 #define PRG_IMAGE_END       (*(volatile unsigned int *)0x038E)   /* End address of a loaded program image (0 = none) */
 #define NV_ID               (*(volatile unsigned char *)0x0390)  /* Owner ID input for the NvWrite Kernal entry (the C wrapper sets it) */
 
-/* Video variables (v2.0): */
+/* Video variables (v2.0; VID_BORDER added in v2.0.2): */
 #define VID_PEN             (*(volatile unsigned char *)0x0391)  /* Pen: attribute byte for new output, fg<<4 | bg */
 #define VID_TOP             (*(volatile unsigned char *)0x0392)  /* Name-table row shown at the top (0-23) */
 #define VID_MODE            (*(volatile unsigned char *)0x0393)  /* $00 console not up since KernalInit, $01 Text console intact, else VMODE | b7 disturbed */
@@ -162,6 +162,7 @@
 #define VDP_P1              (*(volatile unsigned char *)0x0399)
 #define VDP_P2              (*(volatile unsigned char *)0x039A)
 #define VDP_P3              (*(volatile unsigned char *)0x039B)
+#define VID_BORDER          (*(volatile unsigned char *)0x039C)  /* Border the console shows: register 7 low nibble; KernalInit sets 0x0F (v2.0.2) */
 
 
 /* =============================================================================
