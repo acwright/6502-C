@@ -71,3 +71,48 @@ Until the emulator bundles BIOS 2.0 for the PICOVDP card, add
 Burn an EEPROM (28C256, via [minipro](https://gitlab.com/DavidGriffith/minipro)):
 
     make eeprom
+
+## As a Flash Cart
+
+`make FLASH=128K|256K|512K|1M` builds the same program as a banked Flash Cart
+image, with two things different. The link takes `crt0cart-flash.o` instead of
+`crt0cart.o`, which clears the bank register's shadow at reset and carries
+`set_bank` and `current_bank`; and the C program's budget drops from 16,378
+bytes to 8,186, because a banked cart's fixed region is half the size of a
+fixed cart's window. `make size` shows it.
+
+The build also switches on a short worked example, which is the part worth
+reading:
+
+```c
+#pragma rodata-name (push, "BANK01")
+static const char banked_greeting[] = "...and this one lives in bank $01.";
+#pragma rodata-name (pop)
+
+set_bank(0x01);
+PrintStr(banked_greeting);
+```
+
+`PrintStr` is in the Kernal at `$A090`, not in the window, so the bank stays
+selected across the call. Everything after `set_bank` is an ordinary read of
+ordinary memory — once a bank is selected it is not special, and that is the
+whole idea.
+
+Bank 0 holds a recognisable filler string, and `main()` prints an initialized
+variable beside it. That is the cheap check on the one thing that would fail
+silently: `DATA`'s load image is pinned to the fixed region, and if it were in
+a bank the startup would copy bank 0's filler into every initialized variable
+instead — correctly, every time, until somebody used bank 0 for something.
+
+    make FLASH=512K
+    make FLASH=512K run
+    make FLASH=512K size
+    make all-flash
+
+`make run` on a banked image needs 6502-EMULATOR 3.4.0 or later; an older one
+drops it without a word and boots to BASIC. `make eeprom` refuses a flash
+image; `make flash FLASH=512K` burns one in circuit through the Flash Helper.
+
+See the repository README's [Banked
+cartridges](../README.md#banked-cartridges) for the rules, chiefly that C code
+stays in the fixed region and only `const` data goes in a bank.

@@ -74,10 +74,14 @@ Cartridge projects build a `.crt` instead of a `.prg`, so they have no `woz`
 or `cf` target and add one of their own:
 
 - `make eeprom` - Burn the image to a 28C256 with [minipro](https://gitlab.com/DavidGriffith/minipro)
+- `make FLASH=128K|256K|512K|1M` - Build a banked Flash Cart image instead — see [Banked cartridges](#banked-cartridges)
+- `make all-flash` - Build all four Flash Cart sizes
+- `make flash` - Burn a Flash Cart in circuit through the Flash Helper
 
 At the top level, `make` builds `6502.lib` and `6502-VDP.lib` first and then
 every program directory, `make VDP=1` builds every program's VDP version, and
-`make check` runs the header checks in `tests/` on their own.
+`make check` runs the header checks in `tests/` and the banked-config check.
+`make configs` regenerates the four banked cartridge configs.
 
 ### Example
 
@@ -99,6 +103,7 @@ Six pieces, five of them shared at the top level:
 | `6502-VDP.h`, `6502-VDP.inc` | The same pair for BIOS 2.x and the 6502-PICOVDP — see [Choosing a build](#choosing-a-build) |
 | `6502.cfg` | The linker config: where the program, the C stack and the heap go |
 | `6502-16K.cfg` | The same, for a cartridge ROM at `$C000` |
+| `6502-128K.cfg` … `6502-1M.cfg` | The same, for a banked Flash Cart — generated, see [Banked cartridges](#banked-cartridges) |
 | `lib/` | The sources of `6502.lib` and `6502-VDP.lib` — startup, Kernal wrappers, `write()` |
 | `<Program>/` | Your `.c`, its Makefile, its README |
 
@@ -111,6 +116,7 @@ Six pieces, five of them shared at the top level:
 | Header | `6502.h` | `6502-VDP.h` |
 | Library | `6502.lib` | `6502-VDP.lib` |
 | Cartridge startup | `lib/crt0cart.o` | `lib/vdp/crt0cart.o` |
+| Flash Cart startup | `lib/crt0cart-flash.o` | `lib/vdp/crt0cart-flash.o` |
 | Outputs | `HelloWorld.prg` | `HelloWorld-VDP.prg` |
 
 A source that builds both ways picks its header with the `VDP` macro. The
@@ -332,6 +338,115 @@ that `JMP (IRQ_PTR)` / `JMP (NMI_PTR)`. `KernalInit` has already pointed those
 RAM vectors at the default handlers, so keyboard and serial input keep working
 without a line of handler code, and a program that wants its own can still
 write `IRQ_PTR` from C.
+
+## Banked cartridges
+
+**Start with the budget, because it goes the way nobody expects.**
+
+| | Code space for the C program |
+|---|--:|
+| `6502-16K.cfg`, a 32 KB ROM cart | 16,378 bytes |
+| `6502-512K.cfg`, a 512 KB Flash Cart | 8,186 bytes |
+
+A C cartridge that does nothing special has **less** room on a banked cart,
+not more. Everything the C runtime assumes is flat — `STARTUP`, `CODE`,
+`RODATA`, the `DATA` load image — has to be in the fixed region, and the fixed
+region is half the size of a fixed cartridge's window. A program that builds
+today at 12 KB does not fit a banked build at all.
+
+So: **you move to a banked cart for the banks, not for the code space.** What
+you get in exchange is 120 KB to just under 1 MB of `const` data that a fixed
+cartridge could not hold.
+
+### The mapper, in one paragraph
+
+`$C000-$DFFF` is an 8 KB window onto one bank at a time. `$E000-$FFFF` is a
+fixed 8 KB — the chip's last bank, always — and it holds the CPU vectors,
+which is why they can never be banked out. Writing any address in `$E000-$FFFF`
+latches the bank register; it reaches no flash. Reset clears it to 0.
+
+### Putting something in a bank
+
+cc65 has no notion of banks, but it does let a translation unit name its
+segments, and the linker config maps each `BANKnn` segment to a bank. **The
+segment name is the value you write.**
+
+```c
+#pragma rodata-name (push, "BANK01")
+static const unsigned char level1[] = { ... };   /* now at $C000 in bank 1 */
+#pragma rodata-name (pop)
+
+set_bank(0x01);
+draw(level1);
+```
+
+That is the whole mechanism, and it is enough for the case that matters:
+**large `const` data in banks, all code in the fixed region.** It is what the
+toolchain supports well, and it is what [HelloWorldCart](HelloWorldCart)
+demonstrates under `FLASH=`.
+
+`set_bank` and `current_bank` are declared in `6502.h` and `6502-VDP.h` and
+live in `crt0cart-flash.o`, which a cartridge Makefile links when `FLASH=` is
+set:
+
+```c
+void set_bank(unsigned char bank);        /* select, and record in the shadow */
+unsigned char current_bank(void);         /* what set_bank last selected */
+```
+
+The register cannot be read back, so `set_bank` keeps a zero-page shadow and
+`current_bank` reads it. An interrupt handler that touches banked data saves
+`current_bank()`, selects its own, and passes the saved value back to
+`set_bank` before it returns.
+
+### Calling a function in a bank: possible, and a trap
+
+It compiles. It links. It crashes, and there is no diagnostic anywhere in the
+toolchain.
+
+`#pragma code-name (push, "BANK02")` puts a function in a bank, but the
+compiler emits an ordinary `jsr`. So the caller has to select the bank first
+and restore it after, the callee must not switch banks itself, and nothing
+checks either. Worse, the callee's own `rts` executes whatever the *current*
+bank holds at the return address if anything moved the register in between.
+
+**Do not, until you have a reason.** These configs load `CODE` into `FIXED`
+for exactly that reason: a C program that stays out of `#pragma code-name`
+cannot make the mistake at all.
+
+### What `DATA` has to do with any of this
+
+`DATA`'s load image is pinned to the fixed region — `load = FIXED, run = RAM`
+— and the reason is worth knowing because the failure looks like success.
+`copydata` runs at reset to move initialized variables out of ROM and into
+RAM. Bank 0 is what the register holds at reset, so a load image in a bank
+would be read correctly, every time, until the day somebody put something else
+in bank 0 — and then every initialized variable in the program would come up
+holding that instead. `HelloWorldCart`'s `FLASH=` build puts a recognisable
+string in bank 0 and prints an initialized variable next to it, which is the
+cheapest possible check that this is still true.
+
+### Naming
+
+| Build | Output | Part |
+|---|---|---|
+| `make` | `Name.crt`, 32,768 bytes | 28C256 ROM cart |
+| `make FLASH=128K` | `Name-128K.crt`, 131,072 bytes | SST39SF010A |
+| `make FLASH=256K` | `Name-256K.crt`, 262,144 bytes | SST39SF020A |
+| `make FLASH=512K` | `Name-512K.crt`, 524,288 bytes | SST39SF040 |
+| `make FLASH=1M` | `Name-1M.crt`, 1,048,576 bytes | two SST39SF040 |
+
+With `VDP=1` the `-VDP` comes first: `Name-VDP-512K.crt`. **The size in the
+name is a label; the size in the bytes is what the machine reads** —
+everything that loads a `.crt` picks the mapper from the byte count, and only
+warns when the name disagrees.
+
+`make run` on a banked image needs 6502-EMULATOR 3.4.0 or later; an older one
+drops anything that is not 32,768 bytes without a word and boots to BASIC.
+`make flash` burns a Flash Cart in circuit through the Flash Helper, and reads
+the `.crt` and nothing else — there is no flag that folds a save into what it
+writes. The [Bigger cartridges](https://acwright.github.io/6502-DOCS/assembly/flash-carts)
+chapter is the full explanation.
 
 ## What it costs
 
