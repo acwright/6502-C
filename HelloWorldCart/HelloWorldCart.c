@@ -33,6 +33,14 @@
  *   whole jump table — and everything in 6502.h or 6502-VDP.h that wraps it
  *   — is available exactly as it always was.
  *
+ *   THE FLASH CART BUILD  (make FLASH=128K|256K|512K|1M)
+ *   ----------------------------------------------------
+ *   Everything below in `#ifdef FLASH` is the banked build, and `make` with
+ *   no FLASH= produces the same 32,768 bytes it always has.  What it adds is
+ *   the one thing a C program on a banked cart actually does: a `const` array
+ *   in a bank, read after a set_bank().  The README section *Banked
+ *   cartridges* is the argument; this is the worked example of it.
+ *
  * =============================================================================
  */
 
@@ -45,6 +53,42 @@
 #else
 #include "6502.h"
 #endif
+
+#ifdef FLASH
+
+/* --- Something to put in a bank -------------------------------------------
+ *
+ * `#pragma rodata-name` is the whole mechanism.  cc65 has no notion of banks;
+ * it just puts this array in a segment called BANK01, and the linker config
+ * puts that segment in the bank that appears at $C000-$DFFF when the register
+ * holds 1.  The segment name IS the value you write.
+ *
+ * Note what is NOT here: no `#pragma code-name`.  All the code in this file
+ * stays in the fixed region, which is where the configs put CODE, and calling
+ * a function in a bank is the trap the README argues against at length.
+ */
+
+#pragma rodata-name (push, "BANK01")
+static const char banked_greeting[] = "...and this one lives in bank $01.";
+#pragma rodata-name (pop)
+
+/* Bank 0 gets a recognisable pattern, for the check in main().  This is the
+ * cheap version of catching the DATA-load-address trap: bank 0 is what the
+ * register holds at reset, so a config that left DATA's load image in a bank
+ * would copy THIS into the initialized variables and appear to work until
+ * somebody used bank 0 for something.  The config pins DATA to FIXED, and the
+ * assertion below is what says so out loud.
+ */
+
+#pragma rodata-name (push, "BANK00")
+static const char bank0_filler[] = "BANK0BANK0BANK0BANK0BANK0BANK0BA";
+#pragma rodata-name (pop)
+
+/* An ordinary initialized variable.  crt0cart.s copies it out of the fixed
+ * region and into RAM before main() runs. */
+static char data_check[] = "initialized data survived";
+
+#endif  /* FLASH */
 
 int main(void)
 {
@@ -69,6 +113,32 @@ int main(void)
      * picked video or serial before main() was ever called. */
     printf("cc65 on AC6502, BIOS v%u.%u\n",
            VER_MAJOR(version), VER_MINOR(version));
+
+#ifdef FLASH
+    /* The bank register is cleared by reset, so this is bank 0 — and the
+     * initialized variable must read as itself and not as bank 0's filler. */
+    printf("bank %u: %s\n", current_bank(), data_check);
+
+    /* Select bank 1 and read out of the window.  Everything after set_bank()
+     * is an ordinary read of ordinary memory; PrintStr has no idea the string
+     * it is given is in a bank, because once selected a bank is not special.
+     *
+     * PrintStr is in the Kernal at $A090, not in the window, so the bank stays
+     * selected across the call.  A call into a BANKED function would be the
+     * problem, and there is no such thing in this program. */
+    set_bank(0x01);
+    PrintStr(banked_greeting);
+    PrintCRLF();
+
+    /* Put it back, so anything that runs after this finds what it expects.
+     * Nothing here does, but a routine that leaves the register somewhere its
+     * caller did not choose is the other half of the bug set_bank's shadow
+     * exists to make findable. */
+    set_bank(0x00);
+
+    /* Referenced so the linker keeps BANK00; the value is never used. */
+    (void)bank0_filler;
+#endif
 
     /* Returning is allowed — crt0cart.s runs the destructors and halts.
      * A cartridge with something to do would loop here instead. */
