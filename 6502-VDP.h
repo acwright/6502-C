@@ -1359,4 +1359,36 @@ struct __ac_vc {
 #define TMS_WHITE           0xF
 
 
+/* --- Flash Cart: the bank register --- */
+/* Only in a banked cartridge build — one linked against crt0cart-flash.o,
+ * which a cartridge Makefile names when FLASH= is set.  A .prg or a fixed
+ * cartridge that calls either gets "Unresolved external '_set_bank'" from the
+ * linker, which is the intended answer.
+ *
+ * A Flash Cart maps an 8 KB window at $C000-$DFFF onto one bank at a time,
+ * with a fixed 8 KB at $E000-$FFFF that holds the vectors and, in these
+ * configs, all of the C program.  The bank register is write-only and cannot
+ * be read back, so set_bank keeps a zero-page shadow and current_bank reads
+ * it.  RESB clears both to 0.
+ *
+ *     #pragma rodata-name (push, "BANK01")
+ *     const unsigned char level1[] = { ... };      // now at $C000 in bank 1
+ *     #pragma rodata-name (pop)
+ *
+ *     set_bank(0x01);                              // level1 is readable
+ *     draw(level1);
+ *
+ * The segment name IS the value you write.  See the README section *Banked
+ * cartridges* for the rules — chiefly that C code stays in the fixed region
+ * and only const data goes in a bank. */
+
+void set_bank(unsigned char bank);
+/* Select which bank appears at $C000-$DFFF, and record it in the shadow. */
+
+unsigned char current_bank(void);
+/* The bank set_bank last selected.  A handler that touches banked data saves
+ * this, selects its own bank, and passes the saved value back to set_bank
+ * before it returns. */
+
+
 #endif  /* _AC6502_VDP_H */

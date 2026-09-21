@@ -35,12 +35,33 @@
 ;   name ../lib/crt0cart.o on the command line instead, which satisfies the
 ;   __STARTUP__ import before 6502.lib is ever scanned for it.
 ;
+;   THE FLASH CART BUILD  (make FLASH=128K|256K|512K|1M)
+;   ----------------------------------------------------
+;   Assembled a second time with --asm-define FLASH, as crt0cart-flash.o, for
+;   a banked cartridge.  Everything new is inside `.ifdef FLASH`, so the fixed
+;   build's bytes do not move.
+;
+;   Two things change, and one does not:
+;
+;     - The bank register's zero-page shadow is cleared before copydata, so it
+;       agrees with the hardware from the first instruction rather than from
+;       the first set_bank().
+;     - set_bank() and current_bank() are here rather than in a library module,
+;       because they have to be in the fixed region and this file is the one
+;       that is already guaranteed to be.
+;     - STARTUP needs no change at all.  6502-128K.cfg and its three siblings
+;       load it into FIXED; this file just says `.segment "STARTUP"` as it
+;       always did.
+;
 ; =============================================================================
 
         .setcpu "65C02"
 
         .export         _exit
         .export         __STARTUP__ : absolute = 1
+        .ifdef FLASH
+        .export         _set_bank, _current_bank
+        .endif
 
         .import         _main
         .import         zerobss, copydata, initlib, donelib
@@ -59,8 +80,41 @@
         .include        "6502.inc"
         .endif
 
+.ifdef FLASH
+
 ; =============================================================================
-;   CartReset — the RESET vector points here ($C000)
+;   The bank register and its shadow
+; =============================================================================
+;   Write-only, 8 bits, at ANY address in $E000-$FFFF; this one by convention.
+;   A write latches it and reaches no flash — WEB is not asserted there — so
+;   writing the register is never also a flash write.  RESB clears it to 0.
+;
+;   It cannot be read back, so the shadow is the only record of which bank is
+;   selected.  The assembly template puts it at $3A by hand; here $3A is where
+;   the cc65 runtime starts, so the shadow is an ordinary ZEROPAGE byte and the
+;   linker places it with the rest.
+;
+;   It stays private to this module.  C reads it through current_bank() rather
+;   than as a variable, because a program that could assign to it could put the
+;   shadow and the hardware permanently out of step — which is precisely the
+;   failure the shadow exists to prevent.
+; =============================================================================
+
+BANK    = $E000
+
+        .segment "ZEROPAGE"
+
+bankshdw:
+        .res    1
+
+.endif
+
+; =============================================================================
+;   CartReset — the RESET vector points here
+; =============================================================================
+;   $C000 on a fixed cartridge; $E000, the first byte of FIXED, on a banked
+;   one.  The configs decide, and neither this file nor the RESET vector below
+;   has to know which.
 ; =============================================================================
 
         .segment "STARTUP"
@@ -85,6 +139,15 @@ CartReset:
         sta     c_sp
         lda     #>__STACKSTART__
         sta     c_sp+1
+
+.ifdef FLASH
+        ; RESB clears the bank register to 0 — its /MR is on the reset line —
+        ; so the shadow starts honest.  Before copydata, not after: copydata
+        ; reads DATA's load image, which the config pins to FIXED for exactly
+        ; this reason, and anything that later reads a bank has to be able to
+        ; trust the shadow it finds.
+        stz     bankshdw
+.endif
 
         ; Move the initialized variables out of ROM and into RAM, then clear
         ; the uninitialized ones.  A .prg gets both for free from its loader.
@@ -111,6 +174,49 @@ _exit:
 
 @Halt:
         bra     @Halt
+
+.ifdef FLASH
+
+; =============================================================================
+;   set_bank — void set_bank (unsigned char bank)
+; =============================================================================
+;   In: A = the bank value (cc65 passes a single char argument in A).
+;
+;   The shadow is written FIRST.  If an interrupt lands between the two stores,
+;   the handler sees a shadow one instruction ahead of the hardware rather than
+;   one behind, and restoring the hardware from the shadow on the way out puts
+;   the two back in agreement.  The other order leaves them permanently
+;   disagreed.
+;
+;   In STARTUP, so the config puts it in FIXED.  That is not a tidiness
+;   preference: a bank switch from inside a bank returns through an `rts` to an
+;   address that no longer holds the calling code, and the machine does not
+;   fault — it runs whatever the newly selected bank has there.  Since all C
+;   code in these configs loads into FIXED as well, a C program cannot make
+;   that mistake by accident; a `#pragma code-name` into a bank is how it would.
+; =============================================================================
+
+_set_bank:
+        sta     bankshdw                ; shadow first — see above
+        sta     BANK                    ; latch the register
+        rts
+
+; =============================================================================
+;   current_bank — unsigned char current_bank (void)
+; =============================================================================
+;   Out: A = the bank last selected, X = 0 for the promoted high byte.
+;
+;   The only way to read the register, because the register itself cannot be
+;   read.  A handler that touches banked data saves this, selects its own bank,
+;   and calls set_bank with the saved value before it returns.
+; =============================================================================
+
+_current_bank:
+        lda     bankshdw
+        ldx     #$00
+        rts
+
+.endif
 
 ; =============================================================================
 ;   Interrupt trampolines

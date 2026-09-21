@@ -19,6 +19,13 @@
 # library would leave the linker with two ways to satisfy __STARTUP__ and no
 # way to choose.  Cartridge Makefiles name ../lib/crt0cart.o (or
 # ../lib/vdp/crt0cart.o) explicitly.
+#
+# It is built TWICE more for the same reason it is built at all.  A banked
+# Flash Cart needs the bank shadow cleared at reset and set_bank/current_bank
+# in the fixed region, and those are inside `.ifdef FLASH`, so the flash build
+# is a different object: crt0cart-flash.o and vdp/crt0cart-flash.o.  A
+# cartridge Makefile picks the one that matches its FLASH= setting.  Four
+# objects from one source, none of them in a library.
 
 LIB     = ../6502.lib
 VDPLIB  = ../6502-VDP.lib
@@ -40,14 +47,17 @@ SOURCES = crt0.s carryerr.s chario.s print.s video.s sound.s \
 VDPSOURCES = vdp.s
 
 # Built alongside the library, linked by name rather than pulled from it.
-STANDALONE = crt0cart.o
+STANDALONE      = crt0cart.o
+FLASHSTANDALONE = crt0cart-flash.o
+FLASHFLAGS      = --asm-define FLASH
 
 OBJECTS    = $(patsubst %.c,%.o,$(SOURCES:.s=.o))
 VDPOBJECTS = $(addprefix $(VDPDIR)/,$(OBJECTS) $(VDPSOURCES:.s=.o))
 
 .PHONY: all clean
 
-all: $(LIB) $(STANDALONE) $(VDPLIB) $(VDPDIR)/$(STANDALONE)
+all: $(LIB) $(STANDALONE) $(FLASHSTANDALONE) \
+     $(VDPLIB) $(VDPDIR)/$(STANDALONE) $(VDPDIR)/$(FLASHSTANDALONE)
 
 $(LIB): $(OBJECTS)
 	rm -f $(LIB)
@@ -56,6 +66,13 @@ $(LIB): $(OBJECTS)
 $(VDPLIB): $(VDPOBJECTS)
 	rm -f $(VDPLIB)
 	$(AR65) a $(VDPLIB) $(VDPOBJECTS)
+
+# The flash startup, built from the same source with FLASH defined.
+$(FLASHSTANDALONE): crt0cart.s
+	$(CL65) $(CFLAGS) $(FLASHFLAGS) -c -o $@ $<
+
+$(VDPDIR)/$(FLASHSTANDALONE): crt0cart.s | $(VDPDIR)
+	$(CL65) $(CFLAGS) $(VDPFLAGS) $(FLASHFLAGS) -c -o $@ $<
 
 %.o: %.s
 	$(CL65) $(CFLAGS) -c -o $@ $<
@@ -73,5 +90,5 @@ $(VDPDIR):
 	mkdir -p $(VDPDIR)
 
 clean:
-	rm -f $(OBJECTS) $(STANDALONE) $(LIB)
+	rm -f $(OBJECTS) $(STANDALONE) $(FLASHSTANDALONE) $(LIB)
 	rm -rf $(VDPDIR) $(VDPLIB)
