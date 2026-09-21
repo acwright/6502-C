@@ -21,6 +21,31 @@ BIOS 1.x with a TMS9918A, and `make VDP=1` for an ACE converted to a
 [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) on BIOS 2.x — see
 [Choosing a build](#choosing-a-build).
 
+## What this repository is for
+
+This is where small C programs for the AC6502 family live: demos, samples,
+scratchpads, tests, and anything written to show one thing working. Each one is
+a directory with its own source, its own Makefile and its own README, and the
+top-level `make` builds all of them on top of the shared `6502.lib`.
+
+Anything larger gets a repository of its own. A game or an application has
+releases, issues and documentation of its own, and none of that fits in a
+directory next to a twenty-line demo.
+
+The same idea in the other two languages:
+
+- [6502-ASM](https://github.com/acwright/6502-ASM) — assembly programs
+- [6502-BAS](https://github.com/acwright/6502-BAS) — BASIC listings
+
+There is no separate template repository for C — [HelloWorld](HelloWorld) and
+[HelloWorldCart](HelloWorldCart) are the two things to copy, and they are kept
+here because a C program needs the library and the headers next to it. The
+assembly templates are the equivalents one level down:
+[6502-PRG](https://github.com/acwright/6502-PRG) for a program in RAM,
+[6502-CRT](https://github.com/acwright/6502-CRT) for a cartridge or a banked
+Flash Cart, and [6502-BIN](https://github.com/acwright/6502-BIN) for raw
+machine code with no BASIC stub.
+
 ## Building Programs
 
 Each program directory contains its own Makefile. To build a program, navigate to its directory and use `make`.
@@ -475,14 +500,57 @@ straight is a fraction of that when a `time_t` is not what you actually need.
 which `crt0.s` pulls in unconditionally so that stdio always resolves — see
 the comment there for why, and for how to get the bytes back.
 
+## Contributing
+
+A program here is a directory: the top-level Makefile builds `lib/` first and
+then picks up anything with a `Makefile` in it, so adding one is the whole of
+the mechanism.
+
+1. **Copy the nearest worked example.** [HelloWorld](HelloWorld) for a `.prg`,
+   [HelloWorldCart](HelloWorldCart) for a cartridge — its `FLASH=` build is
+   also the banked one. Name the directory after the program in CamelCase, and
+   give the `.c` file the same name.
+2. **Change `TARGET` and `EIGHTTHREE` in the Makefile**, and nothing else to
+   begin with. `TARGET` is the program name; `EIGHTTHREE` is the at-most-eight
+   characters the file is called on a CompactFlash image, which is why
+   `HelloWorld` ships as `HELLOWLD.PRG`.
+3. **Use the shared headers, configs and library.** Your Makefile reaches the
+   top level for all three — `-I ..` for the headers, `-C ../6502.cfg` (or
+   `../6502-16K.cfg` for a cartridge) for the config, `../6502.lib` for the
+   library — and keeps no copies of its own. `6502.inc` and `6502-VDP.inc` are
+   kept identical to [6502-ASM](https://github.com/acwright/6502-ASM)'s, and
+   `make check` compares each header against its include so the pair cannot
+   drift apart.
+4. **Build both ways if the program can.** `make VDP=1` picks `6502-VDP.h` and
+   `6502-VDP.lib` and writes its outputs with a `-VDP` suffix — see
+   [Choosing a build](#choosing-a-build). A program that only calls the Kernal
+   needs no VDP build; one that touches the PICOVDP has no legacy build.
+5. **Keep the usual targets working:** `make`, `make view`, `make size` and
+   `make clean`, plus `woz` and `cf` for a `.prg`, or `eeprom`, `flash`,
+   `FLASH=` and `all-flash` for a cartridge.
+6. **Write a README for the directory** — what the program does, what hardware
+   it needs, and anything surprising about what it costs. The size table in
+   [What it costs](#what-it-costs) is the reason: on a 30 KB machine, what a
+   program links is worth writing down.
+7. **Commit what the source builds, not the disk image.** The `.prg` or 32 KB
+   `.crt` and its `.lst` are committed so a reader can see what comes out
+   without installing cc65. `.img`, `.map` and the larger Flash Cart images are
+   in `.gitignore`.
+
+Then open a pull request. If the program turned into something with a life of
+its own while you were writing it, give it a repository of its own instead and
+[add it to the software list](https://acwright.github.io/6502-DOCS/software/)
+on the documentation site.
+
 ## Related
 
 - [6502-ACE](https://github.com/acwright/6502-ACE) — the hardware, and the index of the whole family
-- [6502-ASM](https://github.com/acwright/6502-ASM) — the same programs in assembly
+- [6502-ASM](https://github.com/acwright/6502-ASM) — the same kind of collection for assembly language; `HelloWorld` and `HelloWorldCart` are there too
 - [6502-BIOS](https://github.com/acwright/6502-BIOS) — the firmware behind `6502.h` and `6502.inc` (1.x) and `6502-VDP.h` and `6502-VDP.inc` (2.x)
 - [6502-PICOVDP](https://github.com/acwright/6502-PICOVDP) — the video card behind `6502-VDP.h`
 - [6502-EMULATOR](https://github.com/acwright/6502-EMULATOR) — run these programs without hardware
-- [6502-BAS](https://github.com/acwright/6502-BAS) — the same idea for BASIC listings
+- [6502-BAS](https://github.com/acwright/6502-BAS) — the same kind of collection for BASIC listings
+- [6502-PRG](https://github.com/acwright/6502-PRG) / [6502-CRT](https://github.com/acwright/6502-CRT) / [6502-BIN](https://github.com/acwright/6502-BIN) — the assembly templates for a program, a cartridge and a raw binary
 - [6502-DOCS](https://github.com/acwright/6502-DOCS) — the documentation site
 
 ## License
