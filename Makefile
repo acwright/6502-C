@@ -10,7 +10,7 @@
 # make VDP=1 reaches every program's Makefile and builds its 6502-PICOVDP /
 # BIOS 2.x version beside the legacy one.
 
-.PHONY: all lib check clean
+.PHONY: all lib check configs check-configs clean
 
 all: lib
 	@for dir in */; do \
@@ -25,9 +25,20 @@ lib:
 	@echo "==> Building 6502.lib and 6502-VDP.lib"
 	@$(MAKE) -C lib all
 
-check:
+check: check-configs
 	@echo "==> Checking headers"
 	@$(MAKE) -C tests check
+
+# The four banked cartridge configs are generated — 15 to 127 near-identical
+# bank stanzas is how a hand-written set drifts — and committed, so they can be
+# read and diffed. They are NOT copies of 6502-ASM's: a C config also carries
+# FEATURES, SYMBOLS, the ZP and RAM areas and the DATA-load-into-RAM split.
+configs:
+	@node tools/make-cart-cfg.mjs
+
+check-configs:
+	@echo "==> Checking the banked cartridge configs"
+	@node tools/make-cart-cfg.mjs --check
 
 clean:
 	@for dir in */; do \
