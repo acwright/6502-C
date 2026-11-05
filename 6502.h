@@ -98,14 +98,14 @@
 #define HW_RAM_H            0x02          /* Bit 1: RAM card high (IO 2, $8400-$87FF) */
 #define HW_RTC              0x04          /* Bit 2: RTC card      (IO 3, DS1511Y) */
 #define HW_CF               0x08          /* Bit 3: Storage card  (IO 4, CompactFlash) */
-#define HW_SC               0x10          /* Bit 4: Serial card   (IO 5, R65C51) */
+#define HW_SC               0x10          /* Bit 4: Serial card   (IO 5, R6551AP) */
 #define HW_GPIO             0x20          /* Bit 5: GPIO card     (IO 6, 65C22 VIA) */
 #define HW_SID              0x40          /* Bit 6: Sound card    (IO 7, SID/ARMSID) */
 #define HW_VID              0x80          /* Bit 7: Video card    (IO 8, TMS9918/pico9918) */
 
 /* IO_MODE values: */
 #define IO_MODE_VIDEO       0x00          /* Console output goes to the TMS9918 */
-#define IO_MODE_SERIAL      0x01          /* Console output goes to the R65C51 */
+#define IO_MODE_SERIAL      0x01          /* Console output goes to the R6551AP */
 
 /* BRK register save area (populated by the BRK handler before entering Monitor): */
 #define BRK_P               (*(volatile unsigned char *)0x0310)  /* Saved processor status (P) */
@@ -297,7 +297,7 @@ void KBDisable(void);
 void KBEnable(void);
 /* Re-enable both keyboard encoders. */
 
-/* --- Serial (R65C51) --- */
+/* --- Serial (R6551AP) --- */
 
 void InitSC(void);
 /* Initialize the serial card: 8-N-1, 19200 baud, RX IRQ enabled. */
@@ -553,7 +553,7 @@ void waitvsync(void);
 #define XMODEM_MAXRETRY     10            /* Max retries per block */
 #define XMODEM_STARTRETRY   60            /* Retries waiting for initial connect (~60s) */
 
-/* --- Serial Card (R65C51 ACIA) (IO 5: $9000-$9003) --- */
+/* --- Serial Card (R6551AP ACIA) (IO 5: $9000-$9003) --- */
 /* Default config after InitSC: 8-N-1, 19200 baud, RX IRQ enabled */
 #define SC_DATA             (*(volatile unsigned char *)0x9000)  /* R/W  — Data register */
 #define SC_RESET            (*(volatile unsigned char *)0x9001)  /* Write— Programmatic reset (any value) */
@@ -906,7 +906,7 @@ struct __ac_st {
 
 #define ST                  (*(volatile struct __ac_st *)0x8C00)
 
-/* --- Serial Card (R65C51 ACIA) (IO 5: $9000-$9003) --- */
+/* --- Serial Card (R6551AP ACIA) (IO 5: $9000-$9003) --- */
 /* +$01 reads as status and writes as a programmatic reset (any value). */
 struct __ac_sc {
     unsigned char       data;           /* +$00  R/W  Data register */
