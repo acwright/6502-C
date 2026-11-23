@@ -5,7 +5,7 @@
  *
  *   CPU:       WDC 65C02S
  *   Video:     6502-PICOVDP (SPEC draft 0.5)
- *   BIOS:      v2.0
+ *   BIOS:      v2.2.0
  *   Compiler:  cc65
  *
  *   The C counterpart of 6502-VDP.inc.  Include it to reach the Kernal
@@ -127,6 +127,7 @@
 /* IO_MODE values: */
 #define IO_MODE_VIDEO       0x00          /* Console output goes to the 6502-PICOVDP */
 #define IO_MODE_SERIAL      0x01          /* Console output goes to the R6551AP */
+#define IO_MIRROR           0x02          /* With IO_MODE_VIDEO: every character also goes to serial (v2.2; off at boot) */
 
 /* BRK register save area.  The BRK handler fills it, prints a report and
  * warm-starts BASIC.  BASIC's SYS also leaves the called routine's A, X, Y and P
@@ -149,6 +150,13 @@
 #define FS_FILE_SIZE        (*(volatile unsigned int *)0x034A)   /* File size in bytes */
 #define PRG_IMAGE_END       (*(volatile unsigned int *)0x038E)   /* End address of a loaded program image (0 = none) */
 #define NV_ID               (*(volatile unsigned char *)0x0390)  /* Owner ID input for the NvWrite Kernal entry (the C wrapper sets it) */
+
+/* Boot CF probe diagnostics, left by the probe for a PEEK after boot: */
+#define CF_PROBE_POLLS      (*(volatile unsigned int *)0x0376)   /* Polls (0.1 ms each at 1 MHz) that found the CF card not ready; 30000 = never ready */
+#define CF_PROBE_STAT       (*(volatile unsigned char *)0x0378)  /* The first status byte the probe read: $80 busy, $8C an empty slot */
+
+/* Serial mirror (v2.2): */
+#define MIRROR_STALL        (*(volatile unsigned char *)0x0379)  /* b7 set = the line took no mirrored byte last time */
 
 /* Video variables (v2.0; VID_BORDER added in v2.0.2): */
 #define VID_PEN             (*(volatile unsigned char *)0x0391)  /* Pen: attribute byte for new output, fg<<4 | bg */
@@ -213,7 +221,8 @@ unsigned char BufferSize(void);
 /* --- IO Mode --- */
 
 void __fastcall__ SetIOMode(unsigned char mode);
-/* Select the console: IO_MODE_VIDEO or IO_MODE_SERIAL. */
+/* Select the console: IO_MODE_VIDEO or IO_MODE_SERIAL, or
+ * IO_MODE_VIDEO | IO_MIRROR to copy a video console to serial as well. */
 
 unsigned char GetIOMode(void);
 /* The active console mode. */
@@ -328,7 +337,16 @@ unsigned char ReadJoystick2(void);
  *     if (!(ReadJoystick1() & JOY_UP)) { ... }
  *
  * Neither routine checks HW_PRESENT — with no GPIO card fitted they read a
- * floating bus, so test HW_GPIO first if the card may be absent. */
+ * floating bus, so test HW_GPIO first if the card may be absent.
+ *
+ * Read a stick at most once a frame (after a VSYNC or a timer tick), never
+ * back to back.  Each call takes both ports from the keyboard encoders for a
+ * few hundred microseconds, and an encoder can neither scan the keyboard nor
+ * hand over a key while it is released, so a loop that calls ReadJoystick1 as
+ * fast as it can leaves the keyboard dead.  Once a frame also needs a
+ * debounce: act on a press or a release only when two reads in a row agree.
+ * A program that uses the sticks and not the keyboard can call KBDisable once
+ * and read GPIO_PORTB (joystick 1) and GPIO_PORTA (joystick 2) directly. */
 
 #define JOY_A               0x01          /* Bit 0 */
 #define JOY_B               0x02          /* Bit 1 */
@@ -601,6 +619,7 @@ void waitvsync(void);
 #define RTC_RAM_DATA        (*(volatile unsigned char *)0x8813)  /* NVRAM data register */
 
 #define RTC_CTRL_B_TE       0x80          /* Transfer Enable — 1 = counters update the user registers once a second, 0 = inhibited */
+#define RTC_CTRL_B_CS       0x40          /* Crystal Select — the DS1501's oscillator load: 0 = 6 pF crystal (the BIOS's probe clears it) */
 #define RTC_CTRL_B_BME      0x20          /* Burst Mode Enable — 1 = RTC_RAM_ADDR auto-increments on each access of RTC_RAM_DATA */
 
 /* The month register's upper 3 bits are oscillator/SQW control, not month
@@ -1212,7 +1231,7 @@ struct __ac_vc {
 
 /* --- BIOS Version --- */
 #define BIOS_VERSION_MAJOR  2
-#define BIOS_VERSION_MINOR  0
+#define BIOS_VERSION_MINOR  2
 
 /* --- NVRAM Save Slots (v1.6) --- */
 #define NV_SLOTS            16            /* Save slots in RTC NVRAM */
